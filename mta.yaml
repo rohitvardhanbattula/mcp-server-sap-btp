@@ -17,7 +17,7 @@ modules:
     type: nodejs
     path: ./
     parameters:
-      app-name: sap-mcp-server-${space}
+      app-name: sap-mcp-server
       memory: 512M
       disk-quota: 1G
       buildpack: nodejs_buildpack
@@ -28,6 +28,13 @@ modules:
       timeout: 180
     properties:
       LOG_LEVEL: debug
+      SAP_DISCOVERY_DESTINATION_NAME: DEMO_S4_HTTP
+      SAP_EXECUTION_DESTINATION_NAME: DEMO_S4_HTTP
+      MCP_TOOL_REGISTRY_TYPE: hierarchical
+      ODATA_ALLOW_ALL: false
+      ODATA_SERVICE_PATTERNS: "*"
+      ODATA_EXCLUSION_PATTERNS: "*_TEST*,*_TEMP*"
+      ODATA_MAX_SERVICES: 50
       
     build-parameters:
       builder: custom
@@ -47,23 +54,23 @@ resources:
     type: org.cloudfoundry.managed-service
     parameters:
       service: destination
-      service-name: sap-mcp-destination-${space}
+      service-name: sap-mcp-destination
       service-plan: lite
 
   - name: sap-mcp-connectivity
     type: org.cloudfoundry.managed-service
     parameters:
-      service-name: sap-mcp-connectivity-${space}
+      service-name: sap-mcp-connectivity
       service: connectivity
       service-plan: lite
 
   - name: sap-mcp-xsuaa
     type: org.cloudfoundry.managed-service
     parameters:
-      service-name: sap-mcp-xsuaa-${space}
+      service-name: sap-mcp-xsuaa
       service: xsuaa
       service-plan: application
       path: ./xs-security.json
       config:
-        xsappname: btp-sap-odata-to-mcp-server-${space}
+        xsappname: btp-sap-odata-to-mcp-server-development
         tenant-mode: dedicated
