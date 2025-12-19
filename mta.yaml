@@ -28,8 +28,8 @@ modules:
       timeout: 180
     properties:
       LOG_LEVEL: debug
-      SAP_DISCOVERY_DESTINATION_NAME: DEMO_S4_HTTP
-      SAP_EXECUTION_DESTINATION_NAME: DEMO_S4_HTTP
+      SAP_DISCOVERY_DESTINATION_NAME: demo_destination
+      SAP_EXECUTION_DESTINATION_NAME: demo_destination
       MCP_TOOL_REGISTRY_TYPE: hierarchical
       ODATA_ALLOW_ALL: false
       ODATA_SERVICE_PATTERNS: "*"

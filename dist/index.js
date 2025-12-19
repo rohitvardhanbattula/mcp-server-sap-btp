@@ -148,7 +148,7 @@ export function createApp() {
         });
     });
     // MCP server info endpoint - Authentication-aware response
-    app.get('/mcp', authService.optionalAuthenticateJWT(), (req, res) => {
+    app.get('/mcp-info', authService.optionalAuthenticateJWT(), (req, res) => {
         const authReq = req;
         const isAuthenticated = !!authReq.authInfo;
         const baseUrl = getBaseUrl(req);

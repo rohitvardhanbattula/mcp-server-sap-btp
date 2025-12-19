@@ -192,7 +192,7 @@ export function createApp(): express.Application {
     });
 
     // MCP server info endpoint - Authentication-aware response
-    app.get('/mcp', authService.optionalAuthenticateJWT() as express.RequestHandler, (req, res) => {
+    app.get('/mcp-info', authService.optionalAuthenticateJWT() as express.RequestHandler, (req, res) => {
         const authReq = req as AuthRequest;
         const isAuthenticated = !!authReq.authInfo;
         const baseUrl = getBaseUrl(req);
