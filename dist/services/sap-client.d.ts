@@ -8,21 +8,9 @@ export declare class SAPClient {
     private config;
     private currentUserToken?;
     constructor(destinationService: DestinationService, logger: Logger);
-    /**
-     * Set the current user's JWT token for subsequent operations
-     */
     setUserToken(token?: string): void;
-    /**
-     * Get destination for discovery operations (technical user)
-     */
     getDiscoveryDestination(): Promise<HttpDestination>;
-    /**
-     * Get destination for execution operations (with JWT if available)
-     */
     getExecutionDestination(): Promise<HttpDestination>;
-    /**
-     * Legacy method - defaults to discovery destination
-     */
     getDestination(): Promise<HttpDestination>;
     executeRequest(options: {
         url: string;
@@ -38,11 +26,36 @@ export declare class SAPClient {
         $orderby?: string;
         $top?: number;
         $skip?: number;
-    }, isDiscovery?: boolean): Promise<import("@sap-cloud-sdk/http-client").HttpResponse>;
+    }, isDiscovery?: boolean, pathParameters?: string, navigationProperty?: string): Promise<import("@sap-cloud-sdk/http-client").HttpResponse>;
     readEntity(servicePath: string, entitySet: string, key: string, isDiscovery?: boolean): Promise<import("@sap-cloud-sdk/http-client").HttpResponse>;
-    createEntity(servicePath: string, entitySet: string, data: unknown): Promise<import("@sap-cloud-sdk/http-client").HttpResponse>;
-    updateEntity(servicePath: string, entitySet: string, key: string, data: unknown): Promise<import("@sap-cloud-sdk/http-client").HttpResponse>;
-    deleteEntity(servicePath: string, entitySet: string, key: string): Promise<import("@sap-cloud-sdk/http-client").HttpResponse>;
+    createEntity(servicePath: string, entitySet: string, data: unknown): Promise<{
+        data: {
+            [x: string]: unknown;
+        };
+        status: number;
+        headers: any;
+        request: any;
+    }>;
+    updateEntity(servicePath: string, entitySet: string, key: string, data: unknown): Promise<{
+        data: {
+            message: string;
+            success: boolean;
+            key: string;
+            updatedFields: string[];
+        };
+        status: number;
+        headers: any;
+        request: any;
+    }>;
+    deleteEntity(servicePath: string, entitySet: string, key: string): Promise<{
+        data: {
+            message: string;
+            success: boolean;
+            key: string;
+        };
+    }>;
+    private sanitizeQueryParam;
+    private cleanUpdateData;
     private handleError;
 }
 //# sourceMappingURL=sap-client.d.ts.map

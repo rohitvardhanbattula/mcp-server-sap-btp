@@ -4,7 +4,6 @@ import { DestinationService } from './destination-service.js';
 import { Logger } from '../utils/logger.js';
 import { Config } from '../utils/config.js';
 
-
 export class SAPClient {
     private discoveryDestination: HttpDestination | null = null;
     private config: Config;
@@ -17,17 +16,11 @@ export class SAPClient {
         this.config = new Config();
     }
 
-    /**
-     * Set the current user's JWT token for subsequent operations
-     */
     setUserToken(token?: string) {
         this.currentUserToken = token;
         this.logger.debug(`User token ${token ? 'set' : 'cleared'} for SAP client`);
     }
 
-    /**
-     * Get destination for discovery operations (technical user)
-     */
     async getDiscoveryDestination(): Promise<HttpDestination> {
         if (!this.discoveryDestination) {
             this.discoveryDestination = await this.destinationService.getDiscoveryDestination();
@@ -35,16 +28,10 @@ export class SAPClient {
         return this.discoveryDestination;
     }
 
-    /**
-     * Get destination for execution operations (with JWT if available)
-     */
     async getExecutionDestination(): Promise<HttpDestination> {
         return await this.destinationService.getExecutionDestination(this.currentUserToken);
     }
 
-    /**
-     * Legacy method - defaults to discovery destination
-     */
     async getDestination(): Promise<HttpDestination> {
         return this.getDiscoveryDestination();
     }
@@ -56,7 +43,6 @@ export class SAPClient {
         headers?: Record<string, string>;
         isDiscovery?: boolean;
     }) {
-        // Use discovery destination for metadata/discovery calls, execution destination for data operations
         const destination = options.isDiscovery
             ? await this.getDiscoveryDestination()
             : await this.getExecutionDestination();
@@ -81,7 +67,7 @@ export class SAPClient {
 
             const response = await executeHttpRequest(destination as HttpDestination, requestOptions);
 
-            this.logger.debug(`Request completed successfully`);
+            this.logger.debug(`Request completed successfully with status: ${response.status}`);
             return response;
 
         } catch (error) {
@@ -90,21 +76,36 @@ export class SAPClient {
         }
     }
 
-    async readEntitySet(servicePath: string, entitySet: string, queryOptions?: {
-        $filter?: string;
-        $select?: string;
-        $expand?: string;
-        $orderby?: string;
-        $top?: number;
-        $skip?: number;
-    }, isDiscovery = false) {
+    async readEntitySet(
+        servicePath: string,
+        entitySet: string,
+        queryOptions?: {
+            $filter?: string;
+            $select?: string;
+            $expand?: string;
+            $orderby?: string;
+            $top?: number;
+            $skip?: number;
+        },
+        isDiscovery = false,
+        pathParameters?: string,
+        navigationProperty?: string
+    ) {
         let url = `${servicePath}${entitySet}`;
+
+        if (pathParameters) {
+            url += `(${pathParameters})`;
+        }
+
+        if (navigationProperty) {
+            url += `/${navigationProperty}`;
+        }
 
         if (queryOptions) {
             const params = new URLSearchParams();
             Object.entries(queryOptions).forEach(([key, value]) => {
-                if (value !== undefined && value !== null) {
-                    params.set(key, String(value));
+                if (value !== undefined && value !== null && value !== '') {
+                    params.set(key, this.sanitizeQueryParam(String(value)));
                 }
             });
 
@@ -121,7 +122,7 @@ export class SAPClient {
     }
 
     async readEntity(servicePath: string, entitySet: string, key: string, isDiscovery = false) {
-        const url = `${servicePath}${entitySet}('${key}')`;
+        const url = `${servicePath}${entitySet}(${key})`;
 
         return this.executeRequest({
             method: 'GET',
@@ -133,30 +134,97 @@ export class SAPClient {
     async createEntity(servicePath: string, entitySet: string, data: unknown) {
         const url = `${servicePath}${entitySet}`;
 
-        return this.executeRequest({
+        const response = await this.executeRequest({
             method: 'POST',
             url,
             data
         });
+
+        const createdEntity = typeof data === 'object' && data !== null 
+            ? { ...data as Record<string, unknown> }
+            : {};
+        
+        if (response.headers && response.headers['location']) {
+            const locationHeader = response.headers['location'];
+            const match = locationHeader.match(/\(([^)]+)\)$/);
+            if (match) {
+                (createdEntity as Record<string, unknown>).__key = match[1];
+            }
+        }
+
+        return {
+            ...response,
+            data: createdEntity
+        };
     }
 
     async updateEntity(servicePath: string, entitySet: string, key: string, data: unknown) {
-        const url = `${servicePath}${entitySet}('${key}')`;
+        const url = `${servicePath}${entitySet}(${key})`;
 
-        return this.executeRequest({
+        const cleanData = this.cleanUpdateData(data);
+
+        const response = await this.executeRequest({
             method: 'PATCH',
             url,
-            data
+            data: cleanData
         });
+
+        return {
+            ...response,
+            data: {
+                message: `Entity updated successfully with key: ${key}`,
+                success: true,
+                key: key,
+                updatedFields: Object.keys(cleanData)
+            }
+        };
     }
 
     async deleteEntity(servicePath: string, entitySet: string, key: string) {
-        const url = `${servicePath}${entitySet}('${key}')`;
+        const url = `${servicePath}${entitySet}(${key})`;
 
-        return this.executeRequest({
+        await this.executeRequest({
             method: 'DELETE',
             url
         });
+
+        return {
+            data: {
+                message: `Entity deleted successfully with key: ${key}`,
+                success: true,
+                key: key
+            }
+        };
+    }
+
+    private sanitizeQueryParam(value: string): string {
+        return value
+            .replace(/'/g, "''")
+            .replace(/\n/g, ' ')
+            .replace(/\r/g, ' ');
+    }
+
+    private cleanUpdateData(data: unknown): Record<string, unknown> {
+        if (!data || typeof data !== 'object') {
+            return {};
+        }
+
+        const cleaned: Record<string, unknown> = {};
+        const reserved = ['__metadata', '__deferred', '__key'];
+
+        for (const [key, value] of Object.entries(data as Record<string, unknown>)) {
+            if (reserved.includes(key)) {
+                continue;
+            }
+
+            if (value === undefined) {
+                continue;
+            }
+
+            cleaned[key] = value;
+        }
+
+        return cleaned;
     }
 
     private handleError(error: unknown): Error {
@@ -167,7 +235,8 @@ export class SAPClient {
             (error as { rootCause?: { response?: { status: number; data?: { error?: { message?: string } }; statusText?: string } } }).rootCause?.response
         ) {
             const response = (error as { rootCause: { response: { status: number; data?: { error?: { message?: string } }; statusText?: string } } }).rootCause.response;
-            return new Error(`SAP API Error ${response.status}: ${response.data?.error?.message || response.statusText}`);
+            const message = response.data?.error?.message || response.statusText || 'Unknown error';
+            return new Error(`SAP API Error ${response.status}: ${message}`);
         }
         return error instanceof Error ? error : new Error(String(error));
     }
